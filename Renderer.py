@@ -1,258 +1,334 @@
-from Platform_Windows import CreateCoord
-from OSPlatform import Platform;
+from Platform_Windows import CAttribute, CreateCoord
+from OSPlatform       import Platform
 
 
-from Config import Debug;
-from LAL    import constant;
-from STL    import Arrays;
-from STL    import Copy;
-from STL import SYS;
-from STL import OS;
+from Config import Debug
+from LAL    import constant
+from STL    import Arrays
+from STL    import Copy
+from STL    import SYS
+from STL    import OS
+
+import State
+import Timing
 
 
-CAttribute = Platform.CAttribute;
+CellAttribute = Platform.CAttribute
 
 
-BufferWidth = 80;
+CBufferWidth = 80
 
-if Debug.Enabled : BufferHeight = 48;
-else             : BufferHeight = 24;
+if Debug.Enabled : CBufferHeight = 48
+else             : CBufferHeight = 24
 
-BorderLineRow   = 24;
-DebugStart      = 25;
-LogSize         = 18;
-PersistentStart = 44;
-PersistentSize  = 4;
-GameEnd         = 23;
+CBorderLineRow   = 24
+CDebugStart      = 25
+CLogSize         = 18
+CPersistentStart = 44
+CPersistentSize  = 4
+CGameEnd         = 23
 
 
 
 class Vec2D :
 
-	X = int;
-	Y = int;
+	X = int
+	Y = int
 
 class CellPacket :
 
+	def SetAttribute(self, _attribute) :
+
+		self._AttribBuf = []
+
+		for index in range(len(self.String)) :
+
+			self._AttribBuf.append(_attribute);
+
+
 	def WriteToBuffer(self) :
 
-		global Buffer; 
+		global _Buffer, _BufferSize
 
-		if (Buffer[0] == None) :
+		if self.String == '' : return
 
-			Buffer[0] = self;
+		if _Buffer[0] == None :
+
+			_Buffer[0] = self
 
 		else :
 
-			Buffer = Arrays.append(Buffer, self);
+			_Buffer = Arrays.append(_Buffer, self)
+
 
 	def Draw(self) :
 
-		global ConsoleScreenBuffer;
-
-		ConsoleScreenBuffer.SetConsoleTextAttribute(self.Attribute);
+		global _CSB;
 		
-		ConsoleScreenBuffer.WriteConsoleOutputCharacter(Characters = self.String, WriteCoord = self.Position);	
+		_CSB.WriteConsoleOutputCharacter(Characters = self.String, WriteCoord = self.Position)
+
+		_CSB.WriteConsoleOutputAttribute(Attributes = self._AttribBuf, WriteCoord = self.Position)
 
 
-	String    = "";
-	Attribute = int;
-	Position  = Platform.CreateCoord(X = 0, Y = 0);
+	String    = ""
+	Position  = Platform.CreateCoord(X = 0, Y = 0)
+	_AttribBuf = None
 
 
 
-GameBorder       = CellPacket();
-PersistentBorder = CellPacket();
+_GameBorder       = CellPacket()
+_PersistentBorder = CellPacket()
 
-GameScanline       = CellPacket();
-GameScanline_Pos   = Vec2D; 
-GameScanline_Pos.X = 0; 
-GameScanline_Pos.Y = 0;
+_GameScanline   = CellPacket()
+_GameScanline_Y = int()
 
-ScreenCenter   = Vec2D;
-ScreenCenter.X = int(Platform.MainScreenWidth  / 2);
-ScreenCenter.Y = int(Platform.MainScreenHeight / 2);
+_ScreenCenter   = Vec2D
+_ScreenCenter.X = int(Platform.MainScreenWidth  / 2)
+_ScreenCenter.Y = int(Platform.MainScreenHeight / 2)
 
-ScreenPosition   = Vec2D;
-ScreenPosition.X = (ScreenCenter.X - (int(BufferWidth / 2) * 8)) - 20;
-ScreenPosition.Y = (ScreenCenter.Y - (int(BufferWidth / 2) * 8)) - 200;
+_ScreenPosition   = Vec2D
+_ScreenPosition.X = (_ScreenCenter.X - (int(CBufferWidth / 2) * 8)) - 20
+_ScreenPosition.Y = (_ScreenCenter.Y - (int(CBufferWidth / 2) * 8)) - 200
 
-ConsoleHandle       = int();
-ConsoleScreenBuffer = None;
-CoordSize           = Platform.CreateCoord( X = BufferWidth, Y = BufferHeight );
-CSBI_Instance       = None; 
-BufferSize          = BufferWidth * BufferHeight;
-Console_Coord       = Platform.CreateSmallRect(Left = 0, Top = 0, Right = BufferWidth - 1, Bottom = BufferHeight - 1);
-RefreshTimer        = 1.0 / 60.0;
+_ConsoleHandle = int()
+_CSB_Front     = None
+_CSB_Back      = None;
+_CSB           = None;
+_CoordSize     = Platform.CreateCoord( X = CBufferWidth, Y = CBufferHeight )
+_BufferSize    = CBufferWidth * CBufferHeight
+_Console_Coord = Platform.CreateSmallRect(Left = 0, Top = 0, Right = CBufferWidth - 1, Bottom = CBufferHeight - 1)
+_RefreshTimer  = Timing.Timer(1.0 / 30.0)
 
-Buffer = Arrays.empty(1, dtype = CellPacket);
+_Buffer = Arrays.empty(1, dtype = CellPacket)
 
-Buffer;
+_DebugLog = Arrays.empty(1, dtype = str)
+
+_PersistentSection = Arrays.array([CellPacket(), CellPacket(), CellPacket(), CellPacket()])
 
 
 
 def SetupConsole() :
 
-	global ConsoleHandle, ConsoleScreenBuffer, CoordSize, Console_Coord, ScreenPosition;
+	global _ConsoleHandle, _CSB_Front, _CSB_Back, _CSB, _CoordSize, _Console_Coord, _ScreenPosition
 
-	ConsoleHandle = Platform.RequestConsole();
+	_ConsoleHandle = Platform.RequestConsole()
 
-	Platform.SetConsoleTitle("TBF Engine: Type Python");
+	Platform.SetConsoleTitle("TBF Engine: Type Python")
 
-	if ConsoleHandle == 0 :
+	if _ConsoleHandle == 0 :
 
-		raise RuntimeError("Renderer: RequestConsole failed.");
+		raise RuntimeError("Renderer: RequestConsole failed.")
 
-	ConsoleScreenBuffer = Platform.CreateScreenBuffer();
+	_CSB_Front = Platform.CreateScreenBuffer()
 
-	if ConsoleScreenBuffer == 0 :
+	_CSB_Back = Platform.CreateScreenBuffer()
 
-		raise RuntimeError("Renderer: Failed to create a console screen buffer.");
+	if _CSB_Front == 0 or _CSB_Back == 0:
 
-	ConsoleScreenBuffer.SetConsoleActiveScreenBuffer();
+		raise RuntimeError("Renderer: Failed to create a console screen buffer.")
 
-	ConsoleScreenBuffer.SetConsoleTextAttribute(Platform.Console_WhiteCell);
+	_CSB_Front.SetConsoleActiveScreenBuffer()
 
-	ConsoleScreenBuffer.WriteConsole(u"Renderer:: Console Created");
+	_CSB_Front.SetConsoleScreenBufferSize(Size = _CoordSize)
 
-	ConsoleScreenBuffer.SetConsoleScreenBufferSize(Size = CoordSize);
+	_CSB_Front.SetConsoleCursorInfo(Size = Platform.CConsole_CursorMinSize, Visible = False)
 
-	ConsoleScreenBuffer.SetConsoleCursorInfo(Size = Platform.Console_CursorMinSize, Visible = True);
+	_CSB_Front.SetConsoleWindowInfo(Absolute = True, ConsoleWindow = _Console_Coord)
 
-	ConsoleScreenBuffer.SetConsoleWindowInfo(Absolute = True, ConsoleWindow = Console_Coord);
+	_CSB_Front.SetConsoleScreenBufferSize(Size = _CoordSize)
 
-	ConsoleScreenBuffer.SetConsoleScreenBufferSize(Size = CoordSize);
+	_CSB_Front.SetConsoleWindowInfo(Absolute = True, ConsoleWindow = _Console_Coord)
 
-	ConsoleScreenBuffer.SetConsoleWindowInfo(Absolute = True, ConsoleWindow = Console_Coord);
+	_CSB_Front.SetConsoleCursorInfo(Size = Platform.CConsole_CursorMinSize, Visible = False)
 
-	ConsoleScreenBuffer.SetConsoleCursorInfo(Size = Platform.Console_CursorMinSize, Visible = True);
+	_CSB_Back.SetConsoleScreenBufferSize(Size = _CoordSize)
+
+	_CSB_Back.SetConsoleCursorInfo(Size = Platform.CConsole_CursorMinSize, Visible = False)
+
+	_CSB_Back.SetConsoleWindowInfo(Absolute = True, ConsoleWindow = _Console_Coord)
+
+	_CSB_Back.SetConsoleScreenBufferSize(Size = _CoordSize)
+
+	_CSB_Back.SetConsoleWindowInfo(Absolute = True, ConsoleWindow = _Console_Coord)
+
+	_CSB_Back.SetConsoleCursorInfo(Size = Platform.CConsole_CursorMinSize, Visible = False)
+
+	_CSB = _CSB_Front
 
 	Platform.SetWindowPosition(
-		ConsoleHandle, 
-		Platform.Handle_Top, 
-		ScreenPosition.X, 
-		ScreenPosition.Y,
+		_ConsoleHandle, 
+		Platform.CHandle_Top, 
+		_ScreenPosition.X, 
+		_ScreenPosition.Y,
 		0,
 		0,
-		Platform.WindowFlag_NoSize
-	);
+		Platform.CWindowFlag_NoSize
+	)
 
 
 def DrawGameScanline() :
 
-	global GameEnd, GameScanline, GameScanline_Pos;
+	global CGameEnd, _GameScanline, _GameScanline_Y
 
-	GameScanline.Position = CreateCoord(X = 0, Y = GameScanline_Pos.Y);
+	_GameScanline.Position = CreateCoord(X = 0, Y = _GameScanline_Y)
 
-	GameScanline.WriteToBuffer();
+	_GameScanline.WriteToBuffer()
 
-	GameScanline_Pos.Y += 1;
+	_GameScanline_Y += 1
 
-	if GameScanline_Pos.Y > GameEnd :
+	if _GameScanline_Y > CGameEnd :
 
-		GameScanline_Pos.Y = 0;
+		_GameScanline_Y = 0
+
+
+def WriteToLog(_string : str) :
+
+	global _DebugLog 
+	
+	if Debug.Enabled : 
+
+		_DebugLog = Arrays.append(_DebugLog, _string)
+
+
+def WriteLogToBuffer() :
+
+	global _DebugLog;
+
+	if Debug.Enabled :
+
+		logRange = CLogSize
+
+		if _DebugLog.size < CLogSize : 
+			
+			logRange = _DebugLog.size
+
+		for index in range(logRange - 1) :
+
+			LogPacket = CellPacket()
+
+			LogPacket.String = _DebugLog[index + 1]
+
+			LogPacket.SetAttribute(Platform.CConsole_WhiteCell)
+
+			LogPacket.Position = Platform.CreateCoord(X = 0, Y = index + CDebugStart)
+
+			LogPacket.WriteToBuffer()
+
+
+def WriteToPersistentSection(_index : int, _string : str) :
+
+	global _PersistentSection
+
+	_PersistentSection[_index - 1].String = _string
+
+	_PersistentSection[_index - 1].SetAttribute(Platform.CConsole_WhiteCell)
+
+
+def WritePersistentSectionToBuffer() :
+
+	global _PersistentSection;
+
+	_PersistentSection[0].WriteToBuffer()
+	_PersistentSection[1].WriteToBuffer()
+	_PersistentSection[2].WriteToBuffer()
+	_PersistentSection[3].WriteToBuffer()
 
 
 def ResetDrawPosition() :
 
-	global ConsoleScreenBuffer; 
-	
-	ConsoleScreenBuffer.SetConsoleCursorPosition(Platform.CreateCoord(X = 0, Y = 0));
+	global _CSB; _CSB.SetConsoleCursorPosition(Platform.CreateCoord(X = 0, Y = 0))
 
 
-EmptyBuffer = "";
+_EmptyBuffer = CellPacket()
 
-for index in range(BufferSize - 1) :
+for index in range(_BufferSize) : _EmptyBuffer.String += " "
 
-	EmptyBuffer += " ";
+_EmptyBuffer.SetAttribute(0);
 
 def Clear() :
 
-	global Buffer, ConsoleScreenBuffer, EmptyBuffer; 
-	
-	Buffer = Arrays.empty(1, dtype = CellPacket);
+	global _Buffer, _EmptyBuffer; _Buffer = Arrays.empty(1, dtype = CellPacket)
 
-	ConsoleScreenBuffer.SetConsoleTextAttribute(0);
+	_EmptyBuffer.WriteToBuffer()
 
-	ConsoleScreenBuffer.WriteConsoleOutputCharacter(Characters = EmptyBuffer, WriteCoord = CreateCoord(X = 0, Y = 0) );
+	_EmptyBuffer.Draw();
+
+	_Buffer = Arrays.empty(1, dtype = CellPacket)
 
 
 def RenderFrame() :
 
-	global Buffer;
+	global _Buffer
 
-	for index in range(Buffer.size) :
-
-		Buffer[index].Draw();
+	for index in range(_Buffer.size) : _Buffer[index].Draw()
 
 
 def LoadModule() :
 
-	global GameBorder, PersistentBorder, Buffer, BufferSize, BorderLineRow, PersistentStart;
+	global _GameBorder, _PersistentBorder, _Buffer, _BufferSize, CBorderLineRow, CPersistentStart, CPersistentSize, _PersistentSection
 
-	GameBorder.Attribute = Platform.Console_WhiteCell;
-	GameBorder.Position  = Platform.CreateCoord(X = 0, Y = BorderLineRow);
+	_GameBorder.Position  = Platform.CreateCoord(X = 0, Y = CBorderLineRow)
 
-	for index in range(BufferWidth -1) :
+	for index in range(CBufferWidth) :
 
-		GameBorder.String = GameBorder.String + "=";
+		_GameBorder.String = _GameBorder.String + "="
 
-	PersistentBorder = Copy.copy(GameBorder);
+	_GameBorder.SetAttribute(Platform.CConsole_WhiteCell)
 
-	PersistentBorder.Position = Platform.CreateCoord(X = 0, Y = PersistentStart - 1);
+	_PersistentBorder = Copy.copy(_GameBorder)
 
-	for index in range(BufferWidth - 1) :
+	_PersistentBorder.Position = Platform.CreateCoord(X = 0, Y = CPersistentStart - 1)
 
-		GameScanline.String = GameScanline.String + "-";
+	for index in range(CBufferWidth) :
 
-	GameScanline.Attribute = CAttribute.BG_Intensity;
+		_GameScanline.String = _GameScanline.String + "-"
 
-	SetupConsole();
+	_GameScanline.SetAttribute(Platform.CConsole_WhiteCell)
+
+	for index in range(CPersistentSize) :
+
+		_PersistentSection[index].Position = Platform.CreateCoord(X = 0, Y = CPersistentStart + index)
+
+	SetupConsole()
 
 
 def UnloadModule() :
 
-	Platform.ReleaseConsole();
+	Platform.ReleaseConsole()
 
-totalDelta = 0.0;
 
+def ProcessTiming() :
+
+	_RefreshTimer.Tick()
+
+
+test = False;
 
 def Update() :
 
-	import time;
+	global _GameBorder, _PersistentBorder, _CSB, _CSB_Front, _CSB_Back
 
-	global totalDelta, GameBorder, PersistentBorder;
+	if _RefreshTimer.Ended():
 
-	delta = 0.0;
+		if _CSB == _CSB_Front : _CSB = _CSB_Back
+		else                  : _CSB = _CSB_Front
 
-	deltaSec = 0.0;
+		Clear()
 
-	deltaInterval = 1.0 / 60.0;
+		DrawGameScanline()
 
-	cyclerTimeInit = time.time_ns();
+		WriteLogToBuffer()
 
-	if Debug.Enabled and totalDelta > deltaInterval:
+		WritePersistentSectionToBuffer()
 
-		totalDelta = 0.0;
+		State.GetEngineState().Render()
 
-		# OS.system('cls');
+		_GameBorder.WriteToBuffer()
 
-		Clear();	
+		_PersistentBorder.WriteToBuffer()
 
-		ResetDrawPosition();
+		RenderFrame()
 
-		DrawGameScanline();
+		_CSB.SetConsoleActiveScreenBuffer();
 
-		GameBorder.WriteToBuffer();
-
-		PersistentBorder.WriteToBuffer();
-
-		RenderFrame();
-
-	cyclerTimeEnd = time.time_ns();
-
-	delta = cyclerTimeEnd - cyclerTimeInit;
-
-	deltaSec = delta / 100000000;
-
-	totalDelta += deltaSec;
+		_RefreshTimer.Reset()

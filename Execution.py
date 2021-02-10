@@ -1,17 +1,14 @@
-from STL import SYS;
+from Config import Debug
+from STL    import SYS
 
-from Config import Debug;
-
-import Cycler;
-import Renderer;
-
+import Cycler
+import Renderer
 
 
 
 def PrepareModules() :
 
-	Renderer.LoadModule();
-
+	Renderer.LoadModule()
 
 
 def Entrypoint() :
@@ -20,19 +17,27 @@ def Entrypoint() :
 
 		try :
 
-			PrepareModules();
+			PrepareModules()
 
-			Cycler.Initialize();
+			Renderer.WriteToLog("TBF Python Engine")
+
+			Cycler.Initialize()
+
+			Renderer.UnloadModule()
 
 		except Exception as _what :
 
-			SYS.stderr.write("Error: " + repr(_what));
+			SYS.stderr.write("Error: " + repr(_what))
 
-			SYS.stderr.flush();
+			SYS.stderr.flush()
 
-			SYS.exit(1);
+			SYS.exit(1)
 	else :
 
-		PrepareModules();
+		PrepareModules()
 
-		Cycler.Initialize();
+		Renderer.WriteToLog("TBF Python Engine")
+
+		Cycler.Initialize()
+
+		Renderer.UnloadModule()

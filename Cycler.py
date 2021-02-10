@@ -1,33 +1,39 @@
-import LAL;
+import LAL
+import Input
+import Renderer
+import State
+import State_Intro
+import Timing
 
 
-import Renderer;
 
-
-
-__Exist = False;
+__Exist = False
 
 
 
 def Initialize() : 
 
-		__Exist = True;
+		__Exist = True
+
+		State.SetEngineState(State_Intro.GetState())
 
 		while __Exist :
 
-			# Take initial snapshot
+			Timing.TakeStartSnapshot()
 
-			# Update Input
+			Input.Update()
 
-			# Update State
+			State.GetEngineState().Update()
 
-			# Update Renderer
+			Renderer.Update()
 
-			Renderer.Update();
+			Timing.TakeEndingSnapshot()
 
-			# Update Timing
-			
+			Timing.Update()
+
+			Renderer.ProcessTiming()
+
 
 def Lapse() :
 
-	__Exist = False;
+	__Exist = False

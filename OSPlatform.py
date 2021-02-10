@@ -1,6 +1,7 @@
-from STL import Platform;
+from STL import Platform
+
 
 
 if Platform.system() == "Windows" :
 
-	import Platform_Windows as Platform;
+	import Platform_Windows as Platform
